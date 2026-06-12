@@ -857,7 +857,7 @@
     </div>
   </div>
 
-  <p style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">FIFA 2026 Album Tracker <strong>v3.2</strong> — Podatki shranjeni lokalno</p>
+  <p style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">FIFA 2026 Album Tracker <strong>v3.3</strong> — Podatki shranjeni lokalno</p>
   <div style="background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-top:12px;box-shadow:var(--shadow);">
     <p style="font-size:13px;font-weight:600;margin-bottom:8px;">🔗 Vnos ključa prek URL-ja</p>
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Na računalniku dodajte ključ v URL in odprite na telefonu:</p>
@@ -1007,18 +1007,25 @@ async function analyzeImage() {
 
 Analiziraj to fotografijo strani/razdelka FIFA 2026 sličičnega albuma.
 
+POSTOPEK (obvezno v tem vrstnem redu):
+1. Najprej preštej, koliko PRILEPLJENIH sličic (fotografij obrazov/dresov igralcev) sploh vidiš na strani. Zapomni si to število.
+2. Nato pojdi skozi stran sistematično: vrstica po vrstica, od leve proti desni. Za vsako polje preberi natisnjeno kodo (npr. "CZE 15") in opiši, kaj je TOČNO NA TEM polju.
+3. Število polj s status "present" se MORA ujemati s številom iz koraka 1.
+
 Vrni SAMO JSON objekt v naslednji obliki (brez markdown, brez razlag):
 {
   "sectionName": "Ime razdelka/strani (npr. Skupina A - Španija)",
   "sectionId": "kratki-id-brez-presledkov",
   "stickers": [
-    {"id": "ESP-1", "name": "Ime igrača ali oznaka", "status": "present"},
-    {"id": "ESP-2", "name": "Prazno polje", "status": "missing"}
+    {"id": "ESP-1", "evidence": "fotografija igralca v rdečem dresu, obraz viden", "status": "present", "name": "Ime igrača"},
+    {"id": "ESP-2", "evidence": "bela grafika 26, brez fotografije", "status": "missing", "name": "Ime igrača"}
   ],
   "totalSlots": 10,
   "presentCount": 6,
   "notes": "Kratka opomba o zaznanih posebnostih"
 }
+
+Polje "evidence" je OBVEZNO: za vsako kodo najprej napiši, kaj konkretno vidiš na tistem mestu, in šele nato določi status. Status mora slediti iz evidence.
 
 KAKO LOČITI PRAZNO POLJE OD PRILEPLJENE SLIČICE (ZELO POMEMBNO):
 - PRAZNO polje (status "missing"): vsebuje natisnjeno belo/svetlo grafiko s številko "26" (logotip prvenstva), kodo polja (npr. "KOR 5") in ime igralca natisnjeno na samem albumu. To je samo OZADJE albuma — NI sličica!
@@ -1071,7 +1078,7 @@ async function analyzeWithGemini(prompt, key) {
               { inline_data: { mime_type: 'image/jpeg', data: capturedImageData } }
             ]
           }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 4000 }
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8000 }
         })
       });
       const data = await response.json();
