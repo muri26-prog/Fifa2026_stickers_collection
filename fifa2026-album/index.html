@@ -856,7 +856,7 @@
     </div>
   </div>
 
-  <p style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">FIFA 2026 Album Tracker <strong>v3.0</strong> — Podatki shranjeni lokalno</p>
+  <p style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">FIFA 2026 Album Tracker <strong>v3.1</strong> — Podatki shranjeni lokalno</p>
   <div style="background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-top:12px;box-shadow:var(--shadow);">
     <p style="font-size:13px;font-weight:600;margin-bottom:8px;">🔗 Vnos ključa prek URL-ja</p>
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Na računalniku dodajte ključ v URL in odprite na telefonu:</p>
@@ -1020,12 +1020,12 @@ Vrni SAMO JSON objekt v naslednji obliki (brez markdown, brez razlag):
 }
 
 Pravila:
-- Za vsak viden prostor/polje za sličico v albumu ustvari vnos
+- Za vsak viden prostor/polje za sličico v albumu ustvari vnos — tudi za PRAZNA polja, brez izjeme
 - status "present" = sličica je prilepljena
 - status "missing" = prostor je prazen
-- id mora biti kratek in enolčen (npr. BRA-GK, SPA-1, LOGO-FIFA)
-- name = ime igrača, logotipa, ali opis polja
-- Bodi natančen - preštej VSA polja na strani`;
+- KLJUČNO za id: v albumu je ob vsakem polju natisnjena uradna koda (npr. "CAN 12", "KOR 19"). VEDNO uporabi točno to natisnjeno kodo v obliki CAN-12, KOR-19. Ne izmišljuj si svojih oznak. Prazna polja imajo kodo natisnjeno na samem polju.
+- name = ime igrača (natisnjeno pod poljem), logotipa, ali opis polja
+- Bodi natančen - preštej VSA polja na strani in vrni VSAK slot, tako polne kot prazne`;
 
   try {
     let text;
@@ -1108,11 +1108,14 @@ async function analyzeWithAnthropic(prompt, key) {
 function showAnalysisResult(result, selectedSection) {
   pendingResult = result;
 
-  // Check for diff if section already exists
-  const existingSectionId = selectedSection !== 'auto' ? selectedSection : result.sectionId;
+  // Check for diff if section already exists (match by sticker ID overlap)
+  const existingSectionId = selectedSection !== 'auto'
+    ? selectedSection
+    : (findMatchingSection(result.stickers) || result.sectionId);
   const existingSection = db.sections[existingSectionId];
-
-  document.getElementById('result-section-name').textContent = result.sectionName;
+  document.getElementById('result-section-name').textContent = existingSection
+    ? existingSection.name + ' (posodobitev)'
+    : result.sectionName;
 
   const grid = document.getElementById('result-stickers');
   grid.innerHTML = '';
@@ -1144,24 +1147,47 @@ function showAnalysisResult(result, selectedSection) {
   document.getElementById('analysis-result').scrollIntoView({ behavior: 'smooth' });
 }
 
+function findMatchingSection(scannedStickers) {
+  const scannedIds = new Set(scannedStickers.map(s => s.id));
+  let bestId = null, bestOverlap = 0;
+  for (const [id, sec] of Object.entries(db.sections)) {
+    const existingIds = Object.keys(sec.stickers);
+    if (existingIds.length === 0) continue;
+    const overlap = existingIds.filter(x => scannedIds.has(x)).length;
+    const ratio = overlap / Math.min(existingIds.length, scannedIds.size);
+    if (ratio >= 0.4 && overlap > bestOverlap) { bestOverlap = overlap; bestId = id; }
+  }
+  return bestId;
+}
+
 function saveAnalysisResult() {
   if (!pendingResult) return;
 
-  const sectionId = document.getElementById('scan-section').value !== 'auto'
+  let sectionId = document.getElementById('scan-section').value !== 'auto'
     ? document.getElementById('scan-section').value
-    : pendingResult.sectionId;
+    : (findMatchingSection(pendingResult.stickers) || pendingResult.sectionId);
 
-  const stickersObj = {};
+  const existing = db.sections[sectionId];
+  const stickersObj = existing ? { ...existing.stickers } : {};
+
+  let upgraded = 0;
   pendingResult.stickers.forEach(s => {
+    const prev = stickersObj[s.id];
+    if (prev && prev.status === 'present') {
+      return;
+    }
+    if (prev && prev.status === 'missing' && s.status === 'present') upgraded++;
     stickersObj[s.id] = { number: s.id, name: s.name, status: s.status };
   });
 
   db.sections[sectionId] = {
-    name: pendingResult.sectionName,
+    name: existing ? existing.name : pendingResult.sectionName,
     stickers: stickersObj,
     lastScan: Date.now(),
     notes: pendingResult.notes || ''
   };
+
+  if (existing && upgraded > 0) showToast(`🎉 ${upgraded} novih sličic dodanih v "${db.sections[sectionId].name}"!`, 'success');
 
   saveToStorage();
   updateHomeStats();
