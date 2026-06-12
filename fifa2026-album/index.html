@@ -1307,18 +1307,41 @@ function renderAlbum() {
 }
 
 // ===== SETTINGS =====
-function saveApiKey() {
-  const key = document.getElementById('api-key-input').value.trim();
-  if (!key) { showToast('Vnesite API ključ.', 'error'); return; }
-  db.apiKey = key;
-  localStorage.setItem('fifa_api_key', key);
+function onProviderChange() {
+  const provider = document.getElementById('ai-provider').value;
+  db.aiProvider = provider;
+  localStorage.setItem('fifa_ai_provider', provider);
+  document.getElementById('gemini-section').style.display = provider === 'gemini' ? 'block' : 'none';
+  document.getElementById('anthropic-section').style.display = provider === 'anthropic' ? 'block' : 'none';
   checkApiKeyWarning();
-  showToast('API ključ shranjen.', 'success');
+}
+
+function saveApiKey() {
+  const provider = document.getElementById('ai-provider').value;
+  if (provider === 'gemini') {
+    const key = document.getElementById('gemini-key-input').value.trim();
+    if (!key) { showToast('Vnesite Gemini API ključ.', 'error'); return; }
+    db.geminiKey = key;
+    db.aiProvider = 'gemini';
+    localStorage.setItem('fifa_gemini_key', key);
+    localStorage.setItem('fifa_ai_provider', 'gemini');
+  } else {
+    const key = document.getElementById('api-key-input').value.trim();
+    if (!key) { showToast('Vnesite Anthropic API ključ.', 'error'); return; }
+    db.apiKey = key;
+    db.aiProvider = 'anthropic';
+    localStorage.setItem('fifa_api_key', key);
+    localStorage.setItem('fifa_ai_provider', 'anthropic');
+  }
+  checkApiKeyWarning();
+  showToast('Ključ shranjen!', 'success');
 }
 
 function checkApiKeyWarning() {
   const warn = document.getElementById('api-key-warning');
-  if (warn) warn.style.display = db.apiKey ? 'none' : 'block';
+  if (!warn) return;
+  const hasKey = db.aiProvider === 'gemini' ? !!db.geminiKey : !!db.apiKey;
+  warn.style.display = hasKey ? 'none' : 'block';
 }
 
 function addManualSection() {
