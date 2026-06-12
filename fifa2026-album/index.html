@@ -233,19 +233,49 @@
     margin-bottom: 16px;
   }
 
-  #videoPreview {
+  .native-cam-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
     width: 100%;
-    display: block;
-    max-height: 60vh;
-    object-fit: contain;
-    background: #000;
+    padding: 32px 16px;
+    background: #f8f9fb;
+    border: none;
+    cursor: pointer;
+    color: var(--primary);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .native-cam-btn .cam-icon {
+    font-size: 48px;
+    line-height: 1;
+  }
+
+  .native-cam-btn .cam-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+    text-align: center;
+    max-width: 220px;
   }
 
   #capturedCanvas {
     width: 100%;
     display: none;
-    max-height: 50vh;
+    max-height: 55vh;
     object-fit: contain;
+    background: #000;
+  }
+
+  #capturedImg {
+    width: 100%;
+    display: none;
+    max-height: 55vh;
+    object-fit: contain;
+    background: #000;
   }
 
   .scan-controls {
@@ -684,14 +714,23 @@
   </div>
 
   <div class="scan-area">
-    <video id="videoPreview" autoplay playsinline muted></video>
-    <canvas id="capturedCanvas"></canvas>
-    <div class="scan-controls">
-      <button class="btn btn-outline" id="btn-switch-camera" onclick="switchCamera()">🔄</button>
-      <button class="btn btn-primary" id="btn-capture" onclick="capturePhoto()">📷 Fotografiraj</button>
-      <input type="file" id="fileInput" accept="image/*" onchange="loadFromFile(event)">
-      <button class="btn btn-outline btn-sm" onclick="document.getElementById('fileInput').click()">🖼️</button>
+    <button class="native-cam-btn" id="btn-open-camera" onclick="document.getElementById('cameraInput').click()">
+      <div class="cam-icon">📷</div>
+      <div>Odpri kamero</div>
+      <div class="cam-hint">Sistemska kamera — lahko oddaljiš pogled in zajameš celo stran</div>
+    </button>
+    <img id="capturedImg" alt="Zajeta slika">
+    <canvas id="capturedCanvas" style="display:none;"></canvas>
+    <div class="scan-controls" id="scan-controls-row" style="display:none;">
+      <button class="btn btn-outline" onclick="resetScan()">🔄 Ponovi</button>
+      <button class="btn btn-accent" id="btn-analyze" onclick="analyzeImage()" disabled>🔍 Analiziraj s AI</button>
     </div>
+  </div>
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="loadFromFile(event)" style="display:none;">
+  <input type="file" id="galleryInput" accept="image/*" onchange="loadFromFile(event)" style="display:none;">
+
+  <div style="display:flex; gap:10px; margin-bottom:16px;">
+    <button class="btn btn-outline" style="flex:1;" onclick="document.getElementById('galleryInput').click()">🖼️ Iz galerije</button>
   </div>
 
   <div class="analysis-card" id="scan-config">
@@ -855,16 +894,13 @@ let db = {
   lastUpdated: null
 };
 
-let currentStream = null;
 let capturedImageData = null;
 let pendingResult = null;
 let currentFilter = 'all';
-let facingMode = 'environment';
 
 // ===== INIT =====
 function init() {
   loadFromStorage();
-  startCamera();
   updateHomeStats();
   renderAlbum();
   populateSectionSelect();
@@ -904,69 +940,31 @@ function showPage(pageId) {
   const navEl = document.getElementById(navId);
   if (navEl) navEl.classList.add('active');
 
-  if (pageId === 'page-scan') { startCamera(); checkApiKeyWarning(); }
+  if (pageId === 'page-scan') { checkApiKeyWarning(); }
   if (pageId === 'page-home') updateHomeStats();
   if (pageId === 'page-album') renderAlbum();
 }
 
 // ===== CAMERA =====
-async function startCamera() {
-  try {
-    if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); }
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 960 }, zoom: 1 }
-    });
-    currentStream = stream;
-    const video = document.getElementById('videoPreview');
-    video.srcObject = stream;
-    video.style.display = 'block';
-    document.getElementById('capturedCanvas').style.display = 'none';
-    document.getElementById('btn-analyze').disabled = true;
-    capturedImageData = null;
-    document.getElementById('analysis-result').style.display = 'none';
-  } catch(e) {
-    showToast('Kamera ni dostopna. Použijte gumb za nalaganje slike.', 'error');
-  }
-}
-
-function switchCamera() {
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  startCamera();
-}
-
-function capturePhoto() {
-  const video = document.getElementById('videoPreview');
-  const canvas = document.getElementById('capturedCanvas');
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0);
-  capturedImageData = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-  video.style.display = 'none';
-  canvas.style.display = 'block';
-  document.getElementById('btn-analyze').disabled = false;
-  if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+function startCamera() {
+  resetScan();
 }
 
 function loadFromFile(event) {
   const file = event.target.files[0];
   if (!file) return;
+  event.target.value = '';
   const reader = new FileReader();
   reader.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.getElementById('capturedCanvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      capturedImageData = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-      document.getElementById('videoPreview').style.display = 'none';
-      canvas.style.display = 'block';
-      document.getElementById('btn-analyze').disabled = false;
-      document.getElementById('analysis-result').style.display = 'none';
-    };
-    img.src = e.target.result;
+    const dataUrl = e.target.result;
+    capturedImageData = dataUrl.split(',')[1];
+    const img = document.getElementById('capturedImg');
+    img.src = dataUrl;
+    img.style.display = 'block';
+    document.getElementById('btn-open-camera').style.display = 'none';
+    document.getElementById('scan-controls-row').style.display = 'flex';
+    document.getElementById('btn-analyze').disabled = false;
+    document.getElementById('analysis-result').style.display = 'none';
   };
   reader.readAsDataURL(file);
 }
@@ -1147,9 +1145,12 @@ function saveAnalysisResult() {
 function resetScan() {
   capturedImageData = null;
   pendingResult = null;
-  document.getElementById('analysis-result').style.display = 'none';
+  document.getElementById('capturedImg').style.display = 'none';
+  document.getElementById('capturedImg').src = '';
+  document.getElementById('btn-open-camera').style.display = 'flex';
+  document.getElementById('scan-controls-row').style.display = 'none';
   document.getElementById('btn-analyze').disabled = true;
-  startCamera();
+  document.getElementById('analysis-result').style.display = 'none';
 }
 
 // ===== HOME STATS =====
