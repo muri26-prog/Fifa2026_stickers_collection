@@ -786,16 +786,16 @@
     <div class="form-group">
       <label>Ponudnik</label>
       <select id="ai-provider" onchange="onProviderChange()">
-        <option value="gemini">OpenRouter Gemini (brezplačno ✓)</option>
+        <option value="gemini">Google Gemini (brezplačno ✓)</option>
         <option value="anthropic">Anthropic Claude (plačljivo)</option>
       </select>
     </div>
 
     <div id="gemini-section">
-      <p style="font-size:12px; color:var(--text-muted); margin: 0 0 10px;">Brezplačno — ključ dobite na <strong>openrouter.ai/keys</strong> (brezplačna registracija)</p>
+      <p style="font-size:12px; color:var(--text-muted); margin: 0 0 10px;">Brezplačno — ključ dobite na <strong>aistudio.google.com/apikey</strong></p>
       <div class="form-group">
-        <label>OpenRouter API Ključ</label>
-        <input type="password" id="gemini-key-input" placeholder="sk-or-v1-..." />
+        <label>Gemini API Ključ</label>
+        <input type="password" id="gemini-key-input" placeholder="AQ... ali AIza..." />
       </div>
     </div>
 
@@ -856,7 +856,7 @@
     </div>
   </div>
 
-  <p style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">FIFA 2026 Album Tracker <strong>v2.5</strong> — Podatki shranjeni lokalno</p>
+  <p style="font-size:11px; color:var(--text-muted); text-align:center; margin-top:8px;">FIFA 2026 Album Tracker <strong>v3.0</strong> — Podatki shranjeni lokalno</p>
   <div style="background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-top:12px;box-shadow:var(--shadow);">
     <p style="font-size:13px;font-weight:600;margin-bottom:8px;">🔗 Vnos ključa prek URL-ja</p>
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Na računalniku dodajte ključ v URL in odprite na telefonu:</p>
@@ -1050,33 +1050,22 @@ Pravila:
 }
 
 async function analyzeWithGemini(prompt, key) {
-  const models = [
-    'google/gemini-2.0-flash-exp:free',
-    'meta-llama/llama-3.2-11b-vision-instruct:free',
-    'qwen/qwen2-vl-7b-instruct:free'
-  ];
+  const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
   let lastError = '';
   for (const model of models) {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'FIFA 2026 Album'
-        },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
-          model,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${capturedImageData}` } }
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: 'image/jpeg', data: capturedImageData } }
             ]
           }],
-          max_tokens: 2000
+          generationConfig: { temperature: 0.1, maxOutputTokens: 4000 }
         })
       });
       const data = await response.json();
@@ -1084,7 +1073,7 @@ async function analyzeWithGemini(prompt, key) {
         lastError = `[${model}] ${data.error?.message || response.status}`;
         continue;
       }
-      return data.choices[0].message.content.trim();
+      return data.candidates[0].content.parts[0].text.trim();
     } catch(e) {
       lastError = `[${model}] ${e.message}`;
     }
@@ -1372,12 +1361,14 @@ async function testApiKey() {
   status.textContent = '⏳ Testiram ključ... (prvih 12 znakov: ' + key.substring(0, 12) + '...)';
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/models', {
-      headers: { 'Authorization': `Bearer ${key}` }
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ contents: [{ parts: [{ text: 'Reci samo: ok' }] }] })
     });
     if (response.ok) {
       status.style.color = 'var(--success)';
-      status.textContent = '✅ Ključ je veljaven! Dolžina: ' + key.length + ' znakov.';
+      status.textContent = '✅ Ključ je veljaven in deluje!';
     } else {
       const err = await response.json();
       status.style.color = 'var(--danger)';
