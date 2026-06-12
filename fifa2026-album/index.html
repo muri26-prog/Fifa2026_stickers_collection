@@ -1030,9 +1030,10 @@ Pravila:
 
 async function analyzeWithGemini(prompt, key) {
   const isNewFormat = key.startsWith('AQ.');
+  const model = 'gemini-2.0-flash';
   const url = isNewFormat
-    ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
-    : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
   const headers = { 'Content-Type': 'application/json' };
   if (isNewFormat) headers['x-goog-api-key'] = key;
